@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stalk Market</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/web/favicon-64.png?v=2" />
+  <link rel="apple-touch-icon" href="/web/favicon-180.png?v=2" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="/web/styles.css" />
+  <script>
+    try { document.documentElement.setAttribute("data-theme", localStorage.getItem("sm-theme") === "light" ? "light" : "dark"); } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+  </script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Stalk Market home">
+        <img class="brand-logo on-dark" src="/web/logo-light.png" alt="Stalk Market" width="148" height="47" />
+        <img class="brand-logo on-light" src="/web/logo-dark.png" alt="" width="148" height="47" />
+      </a>
+
+      <nav class="nav" aria-label="Views">
+        <span class="nav-label">Main</span>
+        <button data-view="desk" aria-current="page"><span data-icon="dashboard"></span>Overview</button>
+        <button data-view="sessions"><span data-icon="sessions"></span>Sessions</button>
+        <span class="nav-label">Tools</span>
+        <button data-view="week"><span data-icon="replay"></span>Simulation</button>
+        <button data-view="strategies"><span data-icon="strategies"></span>Strategies</button>
+        <span class="nav-label">Other</span>
+        <button data-view="journal"><span data-icon="journal"></span>Journal</button>
+        <button data-view="settings"><span data-icon="settings"></span>Settings</button>
+      </nav>
+
+      <div class="market" id="market"></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <div class="banners" id="banners"></div>
+      <main>
+        <section id="view-desk"></section>
+        <section id="view-simulate" class="hidden"></section>
+        <section id="view-replay" class="hidden"></section>
+        <section id="view-week" class="hidden"></section>
+        <section id="view-sessions" class="hidden"></section>
+        <section id="view-strategies" class="hidden"></section>
+        <section id="view-journal" class="hidden"></section>
+        <section id="view-settings" class="hidden"></section>
+      </main>
+    </div>
+
+    <aside class="rail" id="rail" aria-label="Performance and Drex"></aside>
+  </div>
+
+  <dialog id="dlg">
+    <h2 id="dlg-title"></h2>
+    <p id="dlg-body"></p>
+    <div class="row">
+      <button class="btn" id="dlg-cancel">Cancel</button>
+      <button class="btn primary" id="dlg-ok">Confirm</button>
+    </div>
+  </dialog>
+  <div class="toast hidden" id="toast" role="status"></div>
+
+  <script src="/web/icons.js"></script>
+  <script src="/web/lib.js"></script>
+  <script src="/web/app.js"></script>
+</body>
+</html>

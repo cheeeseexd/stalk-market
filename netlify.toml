@@ -1,0 +1,4 @@
+# Read-only copy of the dashboard: the web/ files plus the saved API answers in snapshot/ (scripts/snapshot_site.py).
+[build]
+  publish = "dist"
+  command = "rm -rf dist && mkdir -p dist && cp -r web dist/web && cp web/index.html dist/index.html && cp -r snapshot dist/snapshot"

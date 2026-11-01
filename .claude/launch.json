@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stalk",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "run.py"
+      ],
+      "env": {
+        "STALK_NO_BROWSER": "1"
+      },
+      "port": 8080
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8090",
+        "--directory",
+        "dist"
+      ],
+      "port": 8090,
+      "url": "http://stalk.localhost:8090"
+    }
+  ]
+}
