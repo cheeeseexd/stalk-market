@@ -526,13 +526,18 @@ class Agent:
         while True:
             now = now_ist()
             day, hm = now.strftime("%Y-%m-%d"), now.hour*100+now.minute
-            step = "morning" if 931 <= hm < 1100 else "settle" if hm >= 1515 else None
+            # Morning only until 09:45: a later start would build a "09:30" packet from a stale pre-open feed.
+            step = "morning" if 931 <= hm < 945 else "settle" if hm >= 1515 else None
             if now.weekday() < 5 and step and done.get(step) != day and getattr(self.kite, "logged_in", False):
                 done[step] = day
                 try:
-                    await asyncio.to_thread(subprocess.run, [sys.executable, os.path.join(BASE_DIR, "scripts", "consensus_desk.py"), step],
-                                            cwd=BASE_DIR, capture_output=True, timeout=1500)
+                    p = await asyncio.to_thread(subprocess.run, [sys.executable, os.path.join(BASE_DIR, "scripts", "consensus_desk.py"), step],
+                                                cwd=BASE_DIR, capture_output=True, text=True, timeout=1500)
+                    if p.returncode:                         # retry next minute (the script itself refuses to run a step twice)
+                        done.pop(step, None)
+                        logger.error("consensus desk %s exit %s: %s", step, p.returncode, (p.stderr or "")[-500:])
                 except Exception:
+                    done.pop(step, None)
                     logger.exception("consensus desk %s failed", step)
             await asyncio.sleep(60)
 

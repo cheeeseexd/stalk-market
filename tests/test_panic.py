@@ -161,6 +161,33 @@ class PanicVariantTests(unittest.TestCase):
             r2.day = day
             self.assertEqual([c.symbol for c in r2.morning(day, nifty, gaps, set(), lambda s: stock(gaps[s][1]))], ["LISTED"])
 
+    def test_live_morning_survives_bad_data(self):
+        """Pre-mortem 2026-11-01: a late NIFTY 09:15 bar retries instead of skipping the day, and one ticker whose bars fail is
+        skipped instead of stopping the ranking."""
+        day = "2026-11-02"
+        prev = {"2026-10-30": bars_for("2026-10-30", [(1510, 100, 100, 100, 100)])}
+        late = {**prev, day: bars_for(day, [(920, 99.4, 99.5, 99.3, 99.4)])}
+        nifty = {**prev, day: bars_for(day, [(915, 99.4, 99.5, 99.3, 99.4)])}
+        good = bars_for(day, [(915, 92, 93, 91, 92), (920, 92, 93, 91, 92.5), (1510, 94, 94, 93, 94)])
+        def bars(s):
+            if s == "BROKEN":
+                raise RuntimeError("404")
+            return good
+        with journal_directory() as tmp, patch("stalk.sim.panic_live.universe", return_value={"BROKEN": "smallcap", "OK": "smallcap"}):
+            r = PanicPaper(log_path=os.path.join(tmp, "s.jsonl"))
+            r.day = day
+            with self.assertRaises(RuntimeError):
+                r.morning(day, late, {}, set(), bars, final=False)
+            self.assertFalse(r._done_today(day))
+            picks = r.morning(day, nifty, {"BROKEN": (100, 88), "OK": (100, 92)}, set(), bars)
+            self.assertEqual([c.symbol for c in picks], ["OK"])
+
+    def test_consensus_entry_is_after_the_decision(self):
+        from datetime import datetime
+        from scripts.consensus_desk import next_bar_hm
+        at = lambda t: datetime.strptime(f"2026-11-02 {t}", "%Y-%m-%d %H:%M:%S")
+        self.assertEqual([next_bar_hm(at(t)) for t in ("09:31:10", "09:43:20", "09:45:00", "09:59:59")], [935, 945, 950, 1000])
+
     def test_trade_ids_and_execution_are_separate(self):
         day = "2026-11-02"
         stock = bars_for(day, [(915, 96, 97, 95, 96), (920, 96, 97, 95, 96.5), (1510, 98, 98, 97, 98)])

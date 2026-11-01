@@ -148,10 +148,13 @@ class PanicPaper:
 
     # ------------------------------------------------------------ morning
     def morning(self, day: str, nifty_bars: Dict[str, List[List[float]]], gaps: Dict[str, Tuple[float, float]],
-                near: set, bars_for, liquid_for=None) -> List[panic.Candidate]:
-        """Decide the day's picks. gaps: symbol → (prev close, open). bars_for(symbol) → that day's 5-minute bars."""
+                near: set, bars_for, liquid_for=None, final: bool = True) -> List[panic.Candidate]:
+        """Decide the day's picks. gaps: symbol → (prev close, open). bars_for(symbol) → that day's 5-minute bars.
+        final=False (before 09:40 live): a missing NIFTY 09:15 bar raises so the next tick retries instead of skipping the day."""
         days = sorted(nifty_bars)
-        if day not in nifty_bars or days.index(day) == 0:
+        if day not in nifty_bars or days.index(day) == 0 or _hm(int(nifty_bars[day][0][0])) != 915:
+            if not final:
+                raise RuntimeError("NIFTY 09:15 bar not in yet; retrying")
             self._write("skip", why="no NIFTY bars for today")
             return []
         n_open, n_prev = nifty_bars[day][0][1], nifty_bars[days[days.index(day) - 1]][-1][4]
@@ -168,7 +171,11 @@ class PanicPaper:
         ranked = sorted([c for c in cands if c.gap < panic.STOCK_GAP and not c.results_near], key=lambda c: c.gap)
         picks: List[panic.Candidate] = []
         for c in ranked:                                   # walk down the list until two are tradable (not locked)
-            b = bars_for(c.symbol)
+            try:
+                b = bars_for(c.symbol)
+            except Exception as e:                         # one unknown or blocked ticker must not stop the whole ranking
+                self._write("candidate_skip", symbol=c.symbol, why=f"five-minute bars failed: {str(e)[:120]}")
+                continue
             if not b or _hm(int(b[0][0])) != 915:
                 self._write("candidate_skip", symbol=c.symbol, why="first five-minute bar unavailable")
                 continue
@@ -258,10 +265,9 @@ class PanicPaper:
                             cache[s] = split_days(five_min(s, yc)).get(day, [])
                         return cache[s]
                     picks = self.morning(day, split_days(five_min("NIFTY 50", yc)), gaps, near, bars_for,
-                                         liquid_for=lambda prev: liquid_universe(prev, nse))
-                    self.state["picks"] = picks
+                                         liquid_for=lambda prev: liquid_universe(prev, nse), final=now.hour * 100 + now.minute >= 940)
                     if not picks:
-                        self.state["finished"] = True
+                        self.state["picks"], self.state["finished"] = picks, True
                         return
                     q = await self.quotes([c.symbol for c in picks])
                     q["observed_at"] = datetime.now(IST).isoformat(timespec="seconds")
@@ -271,6 +277,7 @@ class PanicPaper:
                                                  "entry_bar_open": next((b[1] for b in bars_for(c.symbol) if _hm(int(b[0])) == self.entry_hm), None),
                                                  "entry_bar_at": next((datetime.fromtimestamp(b[0], IST).isoformat() for b in bars_for(c.symbol) if _hm(int(b[0])) == self.entry_hm), None),
                                                  "news": announcements(nse, c.symbol, day)} for c in picks], quotes=q)
+                    self.state["picks"] = picks            # only after the entry line is written, so a failure retries
                 finally:
                     nse.close()
             open_picks = [c for c in self.state["picks"] if c.symbol not in self.state.setdefault("closed", {})]

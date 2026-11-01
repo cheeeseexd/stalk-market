@@ -1436,3 +1436,21 @@ Final publication check: API reports137 Sessions, Wednesday two trades/net -Rs69
 **Drill 5 (2026-11-01 ~20:35):** revealed 2023-06-26 (flat). Astra's first Layer-1 reply covered only A–G because Claude's prompt template listed A..G; re-asked for all 10 before any reveal (drills 1, 3, 4 had exactly 7 stocks; drill 2's prompt was corrected). Agreed: APLAPOLLO short (Claude 35, Astra 69); Drex 24.5%; Astra declined → consensus ₹0. Agreed, no veto **+₹23.25**; Claude alone +₹23.25; Astra alone +₹29.88. **Correction:** late gap-down longs did not lose every time — here MCX would have made +₹227.52 and ADANIGREEN +₹79.10.
 **Five-drill totals:** consensus with Drex veto ₹0 (0 trades); **agreed, no veto +₹112.08 (4 trades, 2 won)**; Claude alone −₹14.11; Astra alone +₹73.01. Drex gave all five agreed shorts 24–32%. Still too few trades to conclude; the ordering (agreement ≥ Astra > Claude; Drex veto = no trades) has held across five days.
 **Consensus desk adopted for paper (2026-11-01 ~20:50, owner's yes):** `scripts/consensus_desk.py` + `Agent._consensus_loop` (morning after 09:31, settle after 15:15, weekdays, Kite logged in). Dry run on Fri 2026-10-30 (separate journal `data/consensus_dryrun.jsonl`): 12 movers, Opus (Claude CLI, blind, no tools) and Astra (codex, blind) agreed on 2 small-cap shorts; Drex ranked PARADEEP 33%, ARCIL 30%; settled PARADEEP −₹96.27, ARCIL +₹61.18 → −₹35.09. Plumbing verified end to end; no profit claim.
+
+### 2026-11-01 (night): Monday pre-mortem, two independent reviewers
+
+Question: what could make the first live paper day (Mon 2 Nov) fail quietly or record wrong numbers? Two reviewers read the code
+separately (panic runners; consensus desk). Findings checked against the code, then fixed. No rule constants changed (`panic.py` untouched).
+
+| Finding | Effect if unfixed | Fix |
+|---|---|---|
+| Consensus desk filled at the 09:35 open although the models decide ~09:40-09:55 | **Look-ahead: a fill we could never get** | Models now run in parallel; entry is the first 5-minute bar after the decision time (`entry_hm` in the journal). Past-day drills keep 09:35 |
+| One ticker whose Yahoo bars fail stopped the whole panic ranking every minute | Whole panic day lost | That ticker is logged as `candidate_skip`, ranking continues |
+| A late NIFTY 09:15 bar wrote a permanent "skip"; first bar wasn't checked to be 09:15 | Panic day skipped, or wrong NIFTY open | Retries until 09:40; requires the 09:15 bar |
+| Panic picks stored before the entry line was written | Picks with no entry line, no retry | Picks stored after the write |
+| Consensus subprocess failures were silent and never retried; a 10:30 restart would use a stale 09:30 packet | Day lost with no trace / stale decision | Exit code + stderr logged, retried; morning window 09:31-09:45 |
+| Model timeouts / bad JSON crashed the desk; stocks above ₹5,000 got qty 0; missing 15:10 bar dropped a stopped loss; re-settle duplicated exits | Crash or wrong P&L | Each model call guarded; ₹5,000 price cap; last-bar fallback; settled symbols skipped |
+
+Not fixed (logged): empty NSE pre-open/board-meeting replies are taken as final; Kite quote unwrapping may leave bid/ask empty
+(check Monday's entry lines); a stock with no bar at/after 15:10 never closes in the panic journal. Tests: 311 pass (2 new).
+Needs an app restart (`python run.py`) before Monday 09:00.

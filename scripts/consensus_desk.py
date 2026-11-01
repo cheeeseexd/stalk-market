@@ -98,6 +98,19 @@ def ask_astra(prompt):
         return parse(out.read_text(encoding='utf-8')), 'gpt-6-astra'
 
 
+def safe(ask, prompt):
+    try:
+        return ask(prompt)
+    except Exception as e:                                # timeout, bad JSON: that model is simply unavailable today
+        return None, f'{type(e).__name__}: {str(e)[:200]}'
+
+
+def next_bar_hm(t):
+    m = (t.hour*60+t.minute)*60+t.second
+    m = -(-(m+1)//300)*5                                   # next 5-minute boundary strictly after t, in minutes
+    return max(935, m//60*100+m % 60)
+
+
 def parse(text):
     if isinstance(text, dict):
         return text
@@ -126,7 +139,7 @@ async def build_packet(day, live):
     prev, pdf = prev_session(day, nse)
     from scripts.panic_bhav import MIN_VALUE
     from stalk.config import DEFAULT_UNIVERSE
-    liquid = set(pdf.index[(pdf['value'] >= MIN_VALUE) & (pdf['close'] >= 50) & ~pdf.index.isin(DEFAULT_UNIVERSE)])
+    liquid = set(pdf.index[(pdf['value'] >= MIN_VALUE) & (pdf['close'] >= 50) & (pdf['close'] <= SLOT) & ~pdf.index.isin(DEFAULT_UNIVERSE)])
     if live:
         gaps = {s: op/pc-1 for s, (pc, op) in preopen(nse).items() if s in liquid}
     else:
@@ -186,13 +199,20 @@ def morning(day, live):
         write('skip', day, why='no movers with candles')
         return
     prompt = prompt_for(packet)
-    c, cm = ask_claude(prompt)
-    a, am = ask_astra(prompt)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(2) as ex:                     # both at once, so the decision lands as early as possible
+        fc, fa = ex.submit(safe, ask_claude, prompt), ex.submit(safe, ask_astra, prompt)
+        (c, cm), (a, am) = fc.result(), fa.result()
+    # Live: enter at the first 5-minute bar that opens after the decision (no fill from before we knew). Past days: 09:35, as in the drills.
+    now = datetime.now(IST)
+    entry_hm = next_bar_hm(now) if live else 935
     (d/'claude.json').write_text(json.dumps(dict(model=cm, plan=c), indent=1), encoding='utf-8')
     (d/'astra.json').write_text(json.dumps(dict(model=am, plan=a), indent=1), encoding='utf-8')
     if not c or not a:
         write('skip', day, why=f'a model was unavailable (claude: {cm}; astra: {am}); no consensus, no trade')
         return
+    c = {s: v for s, v in c.items() if isinstance(v, dict)}
+    a = {s: v for s, v in a.items() if isinstance(v, dict)}
     agreed = {s: dict(side=c[s]['side'], claude=c[s].get('confidence'), astra=a[s].get('confidence'))
               for s in packet['stocks'] if c.get(s, {}).get('side') in ('long', 'short') and c[s]['side'] == a.get(s, {}).get('side')}
     p = asyncio.run(drex_rank(packet, agreed)) if agreed else {}
@@ -200,7 +220,7 @@ def morning(day, live):
         agreed[s]['drex'] = p.get(s)
     ranked = sorted(agreed.items(), key=lambda kv: (-(kv[1]['drex'] or 0), -((kv[1]['claude'] or 0)+(kv[1]['astra'] or 0))))[:MAX_TRADES]
     picks = [dict(stock=t, symbol=names[t], tier=packet['stocks'][t]['size'], **v) for t, v in ranked]
-    write('morning', day, pool=len(packet['stocks']), agreed=len(agreed), picks=picks,
+    write('morning', day, pool=len(packet['stocks']), agreed=len(agreed), picks=picks, decided_at=now.strftime('%H:%M:%S'), entry_hm=entry_hm,
           claude_trades=sum(v.get('side') in ('long', 'short') for v in c.values()), astra_trades=sum(v.get('side') in ('long', 'short') for v in a.values()))
     if not picks:
         write('closed_all', day, net=0.0, note='no stock both models agreed on: no trade')
@@ -219,18 +239,22 @@ def settle(day):
         kite = KiteMCP()
         if not await kite.check():
             raise SystemExit('Kite login required (read-only candles)')
-        total = 0.0
+        ehm = m[-1].get('entry_hm', 935)
+        done = {r['trade']['symbol']: r['trade']['net'] for r in rows if r['day'] == day and r['kind'] == 'exit'}
+        total = sum(done.values())
         for p in m[-1]['picks']:
+            if p['symbol'] in done:                        # already settled by an earlier, interrupted run
+                continue
             b = await kite_bars(kite, p['symbol'], day)
             b = b[b.day == day].set_index('hm')
-            if 935 not in b.index or 1510 not in b.index:
-                write('candidate_skip', day, symbol=p['symbol'], why='candles missing at 09:35 or 15:10')
+            if ehm not in b.index or b.index.max() < 1505:
+                write('candidate_skip', day, symbol=p['symbol'], why=f'candles missing at {ehm} or before the close')
                 continue
             sg = 1 if p['side'] == 'long' else -1
-            e = float(b.at[935, 'o'])
+            e = float(b.at[ehm, 'o'])
             stop = e*(1-sg*STOP)
-            px, why = float(b.at[1510, 'o']), 'close'
-            for hm, r in b.loc[935:1505].iterrows():
+            px, why = (float(b.at[1510, 'o']), 'close') if 1510 in b.index else (float(b.c.iloc[-1]), 'close (last bar)')
+            for hm, r in b.loc[ehm:1505].iterrows():
                 if (r.o <= stop) if sg > 0 else (r.o >= stop):
                     px, why = float(r.o), 'stop'
                     break
@@ -238,6 +262,9 @@ def settle(day):
                     px, why = stop, 'stop'
                     break
             qty = int(SLOT//e)
+            if qty == 0:
+                write('candidate_skip', day, symbol=p['symbol'], why='price above one Rs5,000 slot')
+                continue
             gross = sg*(px-e)*qty
             costs = qty*e*RT.get(p['tier'], 0.004)
             t = dict(day=day, symbol=p['symbol'], side=p['side'], qty=qty, entry=round(e, 2), exit=round(px, 2), reason=why,

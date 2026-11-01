@@ -67,7 +67,7 @@ Both strict (NIFTY below -0.5%) and looser (below -0.3%) versions are on paper f
 ## The consensus desk (adopted 2026-11-01, paper only)
 Every trading morning, beside panic buy: after 09:30 the 6 biggest gap-downs and 6 biggest gap-ups among liquid stocks go, anonymously, to
 **Claude Opus and GPT-6 Astra, who decide blind and separately**. Only stocks **both** pick on the same side are paper-traded, at most 2,
-**Drex ranks them but never vetoes**. Entry 09:35 open, 3% stop, out at 15:10, realistic costs, ₹5,000 each. Runs by itself in the app
+**Drex ranks them but never vetoes**. Entry at the first 5-minute bar after both have decided (about 09:40-09:50; 09:35 only in past-day drills), 3% stop, out at 15:10, realistic costs, ₹5,000 each. Runs by itself in the app
 (`_consensus_loop` → `scripts/consensus_desk.py`, needs the Kite login); journal `data/consensus_paper.jsonl`, card on Sessions.
 Evidence so far: 5 blind drills, agreement +₹112 on 4 trades vs Claude alone −₹14 and Astra alone +₹73 — a safety filter, not a proven edge.
 Watch: agreed shorts are often small caps (0.40% costs, short availability not modelled).
