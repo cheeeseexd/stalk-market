@@ -1,5 +1,7 @@
 # Current handoff — read this first in any account or harness
 
+> **Newer state is at the top of START_HERE.md ("Newest first")**: the consensus desk, the Monday pre-mortem fixes, the public GitHub/Netlify copy and the first job on Monday 2 Nov. Read that first; this file covers the drills before it.
+
 Updated 2026-11-01. Workspace: `D:\Trading Agent`, Windows PowerShell, Python 3.12. App: http://localhost:8080. This file is the portable continuation point; older `HANDOFF_ASTRA.md` is historical and its initial test/restart task is already complete. Chat history is not required to continue.
 
 ## Owner intent and the correction that matters

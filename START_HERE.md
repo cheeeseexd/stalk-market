@@ -11,6 +11,29 @@ reviews; no order ever waits on an AI. Nothing trades real money; real orders ar
 `stalk/agent.py::live_ready` (never weaken them). The user now prioritizes minimizing losses, accepting fewer trades and missed winners, honesty about luck,
 plain short messages, rupees only, and every run visible on the dashboard.
 
+## Newest first (2026-11-01, night, Claude)
+- **Pre-mortem fixes** (RUNBOOK "Monday pre-mortem"): the consensus desk now enters at the first 5-minute bar *after* both models decide
+  (`entry_hm` in its journal; it used to assume 09:35, a fill we could never get); the panic runners retry a late NIFTY 09:15 bar
+  until 09:40 and skip a ticker whose bars fail instead of stalling. 311 tests pass. Three open gaps are listed there (check Monday's bid/ask).
+- **Public copy:** GitHub `cheeeseexd/stalk-market` (code, docs, `DIARY.md` = the owner's own story) and a read-only dashboard at
+  https://stalk-market-paper-desk.netlify.app (`scripts/snapshot_site.py` refreshes `snapshot/`; deploy `netlify deploy --prod --dir dist`).
+  `.gitignore` is an allow-list: new top-level files stay private until added to it.
+- **Nothing has traded yet, not even on paper.** Every positive number is a backtest or a drill. The first evidence is Monday 2 Nov.
+
+**Your first job (in order):** before 09:00 the owner restarts `python run.py` and logs into Kite from the app → the app runs 4 panic
+versions + the consensus desk by itself → after 15:35 read `data/panic_paper*.jsonl` and `data/consensus_paper.jsonl`, compare them
+(entry vs official open, slippage, net, empty bid/ask?), write a `trade-postmortem` entry in RUNBOOK.md, publish, update this section.
+On non-panic days panic writes a "skip"; that is correct, not a bug. Don't invent new strategies until ~30 paper trades exist.
+
+### Continuing on another machine (from the GitHub copy)
+The repo has **no `data/`** (Kite candles, NSE bhavcopy, `stalk.db`, journals) and **no `.env`**. To run: `pip install -r requirements.txt`,
+create your own `.env` (Drex key, optional), `python run.py`, log into Kite from the app. The live paper runners fetch what they need
+(NSE pre-open, previous-day bhavcopy, Yahoo/Kite candles), so they work on a fresh machine. Research scripts and data-dependent tests
+need the data rebuilt (`scripts/kite_backfill.py`, `scripts/panic_bhav.py` downloads bhavcopies); those tests skip without it.
+Guards for completed one-time scorers live in `data/`, so on a fresh machine **re-read RUNBOOK before running any scorer: never re-score
+a test RUNBOOK already records as done**. Codex (Astra) and the Claude CLI must be logged in on that machine for the consensus desk;
+without them it writes a "skip".
+
 ## Current state (2026-11-01, Astra handoff)
 **Latest update: portable handoff and Wednesday Drex scenario completed.** Read HANDOFF_CURRENT.md for full continuity. Owner allowed any stocks and non-gap exploratory plans; Tuesday skips came from limited evidence plus restrictive packet design, not stock popularity. Wednesday draw TORNTPHARM/PNBHOUSING: actual Drex ranked 12 stop/target candidates each, highest plans were weak (~2.4/5), both longs stopped. Net -Rs69.04 (gross -Rs49.95, costs Rs19.09); worse-entry -Rs69.39. Saved result and expandable path/level charts on dashboard; no strategy promotion. Two existing Tuesday Claude comparisons remain Pending and sealed, current-assistant plans already committed. All 309 tests pass, app restarted PID13924 with live orders disabled. Frozen rules and earlier scored artifacts unchanged.
 
